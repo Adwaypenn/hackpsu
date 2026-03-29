@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat \"/Users/adwayasharma/Desktop/HackPSU /types/\"*)",
+      "Bash(npm install:*)",
+      "Bash(grep -v \"^$\")",
+      "Bash(npx tsc:*)",
+      "Bash(npx --yes tsc --noEmit)",
+      "Bash(wc -l /Users/adwayasharma/Desktop/HackPSU/components/pages/*.tsx)",
+      "Bash(wc -l /Users/adwayasharma/Desktop/HackPSU/components/charts/*.tsx)"
+    ]
+  }
+}

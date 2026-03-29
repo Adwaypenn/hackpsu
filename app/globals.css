@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Chatbox animated rainbow top bar ── */
+@keyframes chat-border-slide {
+  0%   { background-position: 0%   50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.chat-glow-bar {
+  height: 2px;
+  flex-shrink: 0;
+  background: linear-gradient(90deg, #a855f7, #06b6d4, #ec4899, #3b82f6, #10b981, #a855f7);
+  background-size: 200% 100%;
+  animation: chat-border-slide 3s linear infinite;
+}

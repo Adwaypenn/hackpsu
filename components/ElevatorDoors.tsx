@@ -93,7 +93,7 @@ export default function ElevatorDoors({ isOpen, onClosed, onOpened }: ElevatorDo
           fontFamily: '"Courier New", monospace', fontSize: 13, letterSpacing: '0.3em',
           color: 'rgba(70,70,70,0.45)', fontWeight: 400, userSelect: 'none',
         }}>
-          ACAD
+          Canvo
         </div>
       </motion.div>
 
@@ -115,7 +115,7 @@ export default function ElevatorDoors({ isOpen, onClosed, onOpened }: ElevatorDo
           fontFamily: '"Courier New", monospace', fontSize: 13, letterSpacing: '0.3em',
           color: 'rgba(70,70,70,0.45)', fontWeight: 400, userSelect: 'none',
         }}>
-          IQ
+          Cade
         </div>
       </motion.div>
     </div>

@@ -17,6 +17,7 @@ const FLOORS: { id: Page; label: string; sublabel: string }[] = [
   { id: 'math251',   label: '2',  sublabel: 'MATH'   },
   { id: 'cmpsc473',  label: '1',  sublabel: 'CSCI'   },
   { id: 'dashboard', label: 'G',  sublabel: 'LOBBY'  },
+  { id: 'basement',  label: 'B',  sublabel: 'STUDY'  },
 ];
 
 const FLOOR_LABEL: Record<Page, string> = {
@@ -25,6 +26,7 @@ const FLOOR_LABEL: Record<Page, string> = {
   math251:   '2',
   cmpsc473:  '1',
   dashboard: 'G',
+  basement:  'B',
 };
 
 export default function NavBar({ activePage, onNavigate, disabled }: NavBarProps) {

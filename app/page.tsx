@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Page } from '@/types';
 import { useTheme }    from '@/contexts/ThemeContext';
@@ -40,34 +40,52 @@ function MoonIcon() {
 export default function Home() {
   const { isDark, toggle } = useTheme();
 
-  const [activePage,     setActivePage]     = useState<Page>('dashboard');
-  const [pendingPage,    setPendingPage]     = useState<Page | null>(null);
-  const [doorsOpen,      setDoorsOpen]       = useState(true);   // ElevatorDoors manages its own entrance
-  const [isNavigating,   setIsNavigating]    = useState(false);
-  const [hasNavigated,   setHasNavigated]    = useState(false);  // false = center panel visible
-  const [contentVisible, setContentVisible]  = useState(false);  // true only after doors fully open
+  const [activePage,        setActivePage]        = useState<Page>('dashboard');
+  const [pendingPage,       setPendingPage]        = useState<Page | null>(null);
+  const [doorsOpen,         setDoorsOpen]          = useState(true);
+  const [isNavigating,      setIsNavigating]       = useState(false);
+  const [hasNavigated,      setHasNavigated]       = useState(false);
+  const [firstLoad,         setFirstLoad]          = useState(true);
+  const [contentVisible,    setContentVisible]     = useState(false);
+  const [chatTriggerPrompt, setChatTriggerPrompt]  = useState<string | null>(null);
+
+  // Keep a ref to latest nav state so keyboard handler never goes stale
+  const navRef = useRef({ hasNavigated, isNavigating, activePage });
+  navRef.current = { hasNavigated, isNavigating, activePage };
+
+  const handleStartStudy = (mode: string, intensity: number) => {
+    const prompt = `Are you ready for the ${mode} at the intensity ${intensity}? For which course and for which test are you preparing for?`;
+    setChatTriggerPrompt(prompt);
+  };
 
   const navigateTo = (page: Page) => {
     if ((page === activePage && hasNavigated) || isNavigating) return;
-
-    if (!hasNavigated) {
-      // First navigation: full elevator door animation
-      setHasNavigated(true);
-      setContentVisible(false);
-      setIsNavigating(true);
-      setPendingPage(page);
-      setDoorsOpen(false);
-    } else {
-      // Subsequent navigations: smooth fade only, doors stay open
-      setIsNavigating(true);
-      setContentVisible(false);
-      setTimeout(() => {
-        setActivePage(page);
-        setContentVisible(true);
-        setIsNavigating(false);
-      }, 220);
-    }
+    if (!hasNavigated) { setHasNavigated(true); setFirstLoad(false); }
+    setContentVisible(false);
+    setIsNavigating(true);
+    setPendingPage(page);
+    setDoorsOpen(false);
   };
+
+  // Keyboard shortcuts: 1 → CMPSC 473, 2 → MATH 251, 3 → ENGL 202
+  const navigateRef = useRef(navigateTo);
+  navigateRef.current = navigateTo;
+
+  useEffect(() => {
+    const KEY_MAP: Record<string, Page> = {
+      '1': 'cmpsc473', '2': 'math251', '3': 'engl202',
+    };
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      const { hasNavigated, isNavigating } = navRef.current;
+      if (!hasNavigated || isNavigating) return;
+      const page = KEY_MAP[e.key];
+      if (page) navigateRef.current(page);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const handleDoorsClosed = () => {
     if (pendingPage) {
@@ -84,12 +102,13 @@ export default function Home() {
 
   return (
     <div
+      id="page-zoom-wrapper"
       className="min-h-screen bg-gray-50 dark:bg-gray-950"
       style={{ paddingRight: hasNavigated ? 80 : 0 }}
     >
       {/* ── Top bar ── */}
       <header
-        className="fixed top-0 left-0 z-30 flex items-center justify-between px-6"
+        className="fixed top-0 left-0 z-[50] flex items-center justify-between px-6"
         style={{
           right: hasNavigated ? 80 : 0,
           height: 48,
@@ -98,9 +117,14 @@ export default function Home() {
           backdropFilter: 'blur(12px)',
         }}
       >
-        <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-100">
+        <button
+          onClick={() => { if (!isNavigating) { setHasNavigated(false); setContentVisible(false); setFirstLoad(false); } }}
+          style={{ background: 'none', border: 'none', cursor: isNavigating ? 'default' : 'pointer', padding: 0 }}
+          className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-100 hover:opacity-70 transition-opacity"
+          title="Back to home"
+        >
           Canvocade
-        </span>
+        </button>
         <button
           onClick={toggle}
           className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all"
@@ -129,11 +153,24 @@ export default function Home() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              {activePage === 'dashboard' && <DashboardPage setActivePage={navigateTo} />}
+              {activePage === 'dashboard' && <DashboardPage setActivePage={navigateTo} onStartStudy={handleStartStudy} />}
               {activePage === 'cmpsc473'  && <CoursePage courseId="course_001" />}
               {activePage === 'math251'   && <CoursePage courseId="course_002" />}
               {activePage === 'engl202'   && <CoursePage courseId="course_003" />}
               {activePage === 'professor' && <ProfessorPage />}
+              {activePage === 'basement'  && (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', minHeight: '60vh',
+                }}>
+                  <div style={{ fontSize: 13, letterSpacing: '0.22em', fontFamily: 'monospace', color: '#555' }}>
+                    BASEMENT  ·  B
+                  </div>
+                  <div style={{ fontSize: 11, color: '#2a2a2e', marginTop: 8, letterSpacing: '0.1em', fontFamily: 'monospace' }}>
+                    Study sessions coming soon
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -142,12 +179,16 @@ export default function Home() {
       {/* ── Center panel — shown before first navigation ── */}
       <AnimatePresence>
         {!hasNavigated && (
-          <CenterPanel onNavigate={navigateTo} />
+          <CenterPanel onNavigate={navigateTo} onStartStudy={handleStartStudy} firstLoad={firstLoad} />
         )}
       </AnimatePresence>
 
-      {/* ── Glow edge chat (left wall) ── */}
-      <GlowEdgeChat />
+      {/* ── Glow edge chat (left wall) + right wall mirror ── */}
+      <GlowEdgeChat
+        triggerPrompt={chatTriggerPrompt}
+        onPromptConsumed={() => setChatTriggerPrompt(null)}
+        rightOffset={hasNavigated ? 80 : 0}
+      />
 
       {/* ── Right elevator button panel — shown after first navigation ── */}
       <AnimatePresence>

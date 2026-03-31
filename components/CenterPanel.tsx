@@ -3,9 +3,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Page } from '@/types';
+import StudyModeWidget from '@/components/StudyModeWidget';
 
 interface CenterPanelProps {
-  onNavigate: (page: Page) => void;
+  onNavigate:   (page: Page) => void;
+  onStartStudy: (mode: string, intensity: number) => void;
+  firstLoad?:   boolean;
 }
 
 const FLOORS: { id: Page; label: string; sublabel: string; desc: string; color: string }[] = [
@@ -14,6 +17,7 @@ const FLOORS: { id: Page; label: string; sublabel: string; desc: string; color: 
   { id: 'math251',   label: '2',  sublabel: 'MATH 251',  desc: 'Calculus III',             color: '#22c55e' },
   { id: 'cmpsc473',  label: '1',  sublabel: 'CMPSC 473', desc: 'Operating Systems Design', color: '#6366f1' },
   { id: 'dashboard', label: 'G',  sublabel: 'GROUND',    desc: 'Dashboard & Overview',     color: '#fbbf24' },
+  { id: 'basement',  label: 'B',  sublabel: 'BASEMENT',  desc: 'Study Session',            color: '#ec4899' },
 ];
 
 const QUICK_STATS = [
@@ -23,7 +27,6 @@ const QUICK_STATS = [
   { label: 'Readiness',     value: '82 %' },
 ];
 
-// Phillips screw head
 function Screw({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 14 14">
@@ -35,7 +38,7 @@ function Screw({ size = 14 }: { size?: number }) {
   );
 }
 
-export default function CenterPanel({ onNavigate }: CenterPanelProps) {
+export default function CenterPanel({ onNavigate, onStartStudy, firstLoad = true }: CenterPanelProps) {
   const [hovered,  setHovered]  = useState<Page | null>(null);
   const [selected, setSelected] = useState<Page | null>(null);
 
@@ -49,11 +52,10 @@ export default function CenterPanel({ onNavigate }: CenterPanelProps) {
       className="fixed inset-0 z-30 flex items-center justify-center"
       style={{ pointerEvents: 'none' }}
     >
-      {/* Panel */}
       <motion.div
         initial={{ opacity: 0, y: 48, scale: 0.9 }}
-        animate={{ opacity: 1, y: 0,  scale: 1   }}
-        transition={{ type: 'spring', stiffness: 160, damping: 22, delay: 1.3 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 160, damping: 22, delay: firstLoad ? 1.3 : 0.05 }}
         style={{
           pointerEvents: 'auto',
           width: 320,
@@ -73,20 +75,12 @@ export default function CenterPanel({ onNavigate }: CenterPanelProps) {
 
         {/* Header */}
         <div className="flex flex-col items-center mb-5">
-          <div style={{
-            fontSize: 8, color: '#444', letterSpacing: '0.3em', fontFamily: 'monospace', marginBottom: 6,
-          }}>
+          <div style={{ fontSize: 8, color: '#444', letterSpacing: '0.3em', fontFamily: 'monospace', marginBottom: 6 }}>
             SELECT FLOOR
           </div>
-
-          {/* LED floor display */}
           <div style={{
-            background: '#0a0a0c',
-            border: '1px solid #2a2a2e',
-            borderRadius: 8,
-            padding: '6px 18px',
-            minWidth: 80,
-            textAlign: 'center',
+            background: '#0a0a0c', border: '1px solid #2a2a2e', borderRadius: 8,
+            padding: '6px 18px', minWidth: 80, textAlign: 'center',
             boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.8)',
           }}>
             <motion.span
@@ -94,15 +88,12 @@ export default function CenterPanel({ onNavigate }: CenterPanelProps) {
               initial={{ opacity: 0.4 }}
               animate={{ opacity: 1 }}
               style={{
-                fontFamily: '"Courier New", monospace',
-                fontSize: 28,
-                fontWeight: 700,
+                fontFamily: '"Courier New", monospace', fontSize: 28, fontWeight: 700,
                 color: hovered ? (FLOORS.find(f => f.id === hovered)?.color ?? '#fbbf24') : '#fbbf24',
                 textShadow: hovered
                   ? `0 0 8px ${FLOORS.find(f => f.id === hovered)?.color ?? '#fbbf24'}, 0 0 20px ${FLOORS.find(f => f.id === hovered)?.color ?? '#fbbf24'}88`
                   : '0 0 8px rgba(251,191,36,0.8), 0 0 20px rgba(251,191,36,0.4)',
-                lineHeight: 1.1,
-                display: 'block',
+                lineHeight: 1.1, display: 'block',
               }}
             >
               {hovered ? FLOORS.find(f => f.id === hovered)?.label : '--'}
@@ -116,14 +107,13 @@ export default function CenterPanel({ onNavigate }: CenterPanelProps) {
           </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: 'linear-gradient(to right, transparent, #2e2e34, transparent)', marginBottom: 14 }} />
+        <div style={{ height: 1, background: 'linear-gradient(to right, transparent, #2e2e34, transparent)', marginBottom: 12 }} />
 
         {/* Floor buttons */}
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           {FLOORS.map((floor, i) => {
-            const isHovered  = hovered   === floor.id;
-            const isSelected = selected  === floor.id;
+            const isHovered  = hovered  === floor.id;
+            const isSelected = selected === floor.id;
             return (
               <motion.div
                 key={floor.id}
@@ -142,21 +132,17 @@ export default function CenterPanel({ onNavigate }: CenterPanelProps) {
                       ? `radial-gradient(ellipse at left, ${floor.color}18 0%, transparent 70%)`
                       : 'transparent',
                     border: `1px solid ${isHovered ? floor.color + '44' : '#2a2a2e'}`,
-                    borderRadius: 10,
-                    padding: '9px 12px',
-                    cursor: 'pointer',
-                    transition: 'background 0.2s, border-color 0.2s',
-                    textAlign: 'left',
+                    borderRadius: 10, padding: '6px 12px', cursor: 'pointer',
+                    transition: 'background 0.2s, border-color 0.2s', textAlign: 'left',
                   }}
                 >
-                  {/* Button disc */}
                   <motion.div
                     animate={isSelected ? {
                       boxShadow: [`0 0 0px 0px ${floor.color}00`, `0 0 16px 5px ${floor.color}99`],
                     } : {}}
                     transition={{ duration: 0.25 }}
                     style={{
-                      width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                      width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       border: `2px solid ${isHovered ? floor.color : '#383840'}`,
                       background: isHovered
@@ -166,16 +152,13 @@ export default function CenterPanel({ onNavigate }: CenterPanelProps) {
                         ? `0 0 12px 3px ${floor.color}55`
                         : 'inset 0 2px 4px rgba(0,0,0,0.6)',
                       transition: 'all 0.2s',
-                      fontSize: floor.label.length > 1 ? 11 : 14,
-                      fontWeight: 800,
+                      fontSize: floor.label.length > 1 ? 10 : 13, fontWeight: 800,
                       fontFamily: '"Courier New", monospace',
                       color: isHovered ? floor.color : '#555',
                     }}
                   >
                     {floor.label}
                   </motion.div>
-
-                  {/* Label */}
                   <div>
                     <div style={{
                       fontSize: 11, fontWeight: 600, fontFamily: 'monospace',
@@ -188,8 +171,6 @@ export default function CenterPanel({ onNavigate }: CenterPanelProps) {
                       {floor.desc}
                     </div>
                   </div>
-
-                  {/* Arrow on hover */}
                   <motion.span
                     animate={{ opacity: isHovered ? 1 : 0, x: isHovered ? 0 : -6 }}
                     transition={{ duration: 0.15 }}
@@ -203,8 +184,12 @@ export default function CenterPanel({ onNavigate }: CenterPanelProps) {
           })}
         </div>
 
-        {/* Quick stats — shown at bottom always */}
+        {/* Study Mode widget */}
         <div style={{ height: 1, background: 'linear-gradient(to right, transparent, #2e2e34, transparent)', margin: '14px 0 12px' }} />
+        <StudyModeWidget onStart={onStartStudy} />
+
+        {/* Quick stats */}
+        <div style={{ height: 1, background: 'linear-gradient(to right, transparent, #2e2e34, transparent)', margin: '12px 0 12px' }} />
         <div className="grid grid-cols-4 gap-1">
           {QUICK_STATS.map(s => (
             <div key={s.label} style={{
@@ -217,7 +202,6 @@ export default function CenterPanel({ onNavigate }: CenterPanelProps) {
           ))}
         </div>
 
-        {/* Bottom label */}
         <div style={{ textAlign: 'center', marginTop: 14, fontSize: 8, color: '#2a2a2e', letterSpacing: '0.25em', fontFamily: 'monospace' }}>
           CANVOCADE  ·  ACADEMIC NAVIGATOR
         </div>

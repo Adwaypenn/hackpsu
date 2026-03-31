@@ -7,7 +7,8 @@
       "Bash(npx tsc:*)",
       "Bash(npx --yes tsc --noEmit)",
       "Bash(wc -l /Users/adwayasharma/Desktop/HackPSU/components/pages/*.tsx)",
-      "Bash(wc -l /Users/adwayasharma/Desktop/HackPSU/components/charts/*.tsx)"
+      "Bash(wc -l /Users/adwayasharma/Desktop/HackPSU/components/charts/*.tsx)",
+      "Bash(npm run:*)"
     ]
   }
 }

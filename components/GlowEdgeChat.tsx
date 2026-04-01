@@ -21,58 +21,248 @@ interface GlowEdgeChatProps {
   rightOffset?: number;
 }
 
-function CadeSmiley() {
+type SmileyMode = 'idle' | 'thinking' | 'answering';
+
+function CadeSmiley({ mode }: { mode: SmileyMode }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const frameRef  = useRef<number>(0);
+  const tRef      = useRef(0);
+  const modeRef     = useRef(mode);
+  const prevModeRef = useRef(mode);
+  modeRef.current   = mode;
+
+  // Lerped animation state — updated every frame toward target
+  const s        = useRef({ mouthOpen: 1, eyeShiftY: 0, eyeScale: 1 });
+  // Mouse in canvas-local coordinates (starts far away so no effect on load)
+  const mouseCanvas = useRef({ x: -9999, y: -9999 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const W  = canvas.width;
+    const H  = canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const R  = 74;
+
+    // Track mouse in canvas-local space
+    const onMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseCanvas.current = {
+        x: (e.clientX - rect.left) * (W / rect.width),
+        y: (e.clientY - rect.top)  * (H / rect.height),
+      };
+    };
+    const onMouseLeave = () => { mouseCanvas.current = { x: -9999, y: -9999 }; };
+    window.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseleave', onMouseLeave);
+
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+    // Pull a point toward the cursor — same idea as the edge bezier tendrils
+    const attract = (px: number, py: number, strength = 22, range = 100): [number, number] => {
+      const { x: mx, y: my } = mouseCanvas.current;
+      const dx = mx - px;
+      const dy = my - py;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.1 || dist > range) return [px, py];
+      const t = 1 - dist / range;
+      const f = t * t * strength;          // quadratic fall-off, just like edge intensity
+      return [px + (dx / dist) * f, py + (dy / dist) * f];
+    };
+
+    const glowShape = (
+      ctx: CanvasRenderingContext2D,
+      buildPath: () => void,
+      hue: number,
+    ) => {
+      const col = `hsl(${hue % 360}, 95%, 68%)`;
+      ([
+        { lw: 12, a: 0.03, blur: 20 },
+        { lw:  5, a: 0.10, blur: 10 },
+        { lw:  2, a: 0.50, blur:  4 },
+        { lw:  1, a: 1.00, blur:  0 },
+      ] as { lw: number; a: number; blur: number }[]).forEach(({ lw, a, blur }) => {
+        buildPath();
+        ctx.strokeStyle = col;
+        ctx.lineWidth   = lw;
+        ctx.globalAlpha = a;
+        ctx.shadowColor = col;
+        ctx.shadowBlur  = blur;
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur  = 0;
+    };
+
+    const loop = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { frameRef.current = requestAnimationFrame(loop); return; }
+
+      const T = tRef.current++;
+      ctx.clearRect(0, 0, W, H);
+
+      // ── Detect mode change and snap lerp values to kickstart ─────
+      const m = modeRef.current;
+      if (prevModeRef.current !== m) {
+        const prev = prevModeRef.current;
+        prevModeRef.current = m;
+        // Leaving thinking: snap mouth open and eyes down immediately
+        if (prev === 'thinking') {
+          s.current.mouthOpen = 0.45;
+          s.current.eyeShiftY = s.current.eyeShiftY * 0.3;
+          s.current.eyeScale  = 0.95;
+        }
+        // Leaving answering: snap mouth toward idle
+        if (prev === 'answering') {
+          s.current.mouthOpen = Math.min(s.current.mouthOpen, 1.2);
+        }
+      }
+
+      // ── Lerp toward mode targets ──────────────────────────────────
+      const LS = 0.1;
+      s.current.mouthOpen = lerp(s.current.mouthOpen, m === 'thinking' ? 0.08 : m === 'answering' ? 1.65 : 1, LS);
+      s.current.eyeShiftY = lerp(s.current.eyeShiftY, m === 'thinking' ? -10 : 0, LS);
+      s.current.eyeScale  = lerp(s.current.eyeScale,  m === 'thinking' ? 0.72 : m === 'answering' ? 1.22 : 1, LS);
+      const mo = s.current.mouthOpen;
+
+      // ── Face rings ────────────────────────────────────────────────
+      const faceHue = (210 + T * 0.18) % 360;
+      const drawFaceRing = (offset: number, phase: number) => {
+        glowShape(ctx, () => {
+          const N = 48;
+          ctx.beginPath();
+          for (let i = 0; i <= N; i++) {
+            const a = (i / N) * Math.PI * 2;
+            const w = Math.sin(a * 3 + T * 0.022 + phase) * 3.2 + Math.cos(a * 5 + T * 0.015 + phase) * 1.8;
+            const r = R + offset + w;
+            const [ax, ay] = attract(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+            i === 0 ? ctx.moveTo(ax, ay) : ctx.lineTo(ax, ay);
+          }
+          ctx.closePath();
+        }, faceHue);
+      };
+      drawFaceRing(-4, 0);
+      drawFaceRing(+4, Math.PI);
+
+      // ── Eyes (shift up when thinking, grow when answering) ────────
+      const eyeHue = (270 + T * 0.26) % 360;
+      const drawEye = (ex: number, ey: number, phase: number) => {
+        const eRx = 11 * s.current.eyeScale;
+        const eRy =  7 * s.current.eyeScale;
+        glowShape(ctx, () => {
+          const EN = 24;
+          ctx.beginPath();
+          for (let i = 0; i <= EN; i++) {
+            const a = (i / EN) * Math.PI * 2;
+            const w = Math.sin(a * 3 + T * 0.05 + phase) * 1.1;
+            const [ax, ay] = attract(ex + Math.cos(a) * (eRx + w), ey + Math.sin(a) * (eRy + w * 0.5), 18, 80);
+            i === 0 ? ctx.moveTo(ax, ay) : ctx.lineTo(ax, ay);
+          }
+          ctx.closePath();
+        }, eyeHue);
+        glowShape(ctx, () => {
+          const PN = 12;
+          ctx.beginPath();
+          for (let i = 0; i <= PN; i++) {
+            const a = (i / PN) * Math.PI * 2;
+            const w = Math.sin(a * 4 + T * 0.09 + phase) * 0.7;
+            const [ax, ay] = attract(ex + Math.cos(a) * (3.2 + w), ey + Math.sin(a) * (3.2 + w), 18, 80);
+            i === 0 ? ctx.moveTo(ax, ay) : ctx.lineTo(ax, ay);
+          }
+          ctx.closePath();
+        }, (eyeHue + 55) % 360);
+      };
+      const eyeY = cy - R * 0.27 + s.current.eyeShiftY;
+      drawEye(cx - R * 0.36, eyeY, 0);
+      drawEye(cx + R * 0.36, eyeY, Math.PI);
+
+      // ── Mouth – scales with mouthOpen ─────────────────────────────
+      const smileHue   = (160 + T * 0.22) % 360;
+      const mHalfW     = R * (0.28 + 0.24 * Math.min(mo, 1));
+      const mouthTopY  = cy + R * 0.24;
+      const arcH       = R * (0.03 + 0.46 * mo);
+      const topBow     = 11 * Math.min(mo, 1);
+
+      // upper lip
+      glowShape(ctx, () => {
+        const SN = 28;
+        ctx.beginPath();
+        for (let i = 0; i < SN; i++) {
+          const frac = i / (SN - 1);
+          const wave = Math.sin(frac * Math.PI * 4 + T * 0.04) * 1.4;
+          const [ax, ay] = attract(
+            (cx - mHalfW) + frac * mHalfW * 2,
+            mouthTopY + Math.sin(frac * Math.PI) * topBow + wave,
+            16, 90,
+          );
+          i === 0 ? ctx.moveTo(ax, ay) : ctx.lineTo(ax, ay);
+        }
+      }, smileHue);
+
+      // lower arc
+      glowShape(ctx, () => {
+        const AN = 36;
+        ctx.beginPath();
+        for (let i = 0; i <= AN; i++) {
+          const frac  = i / AN;
+          const angle = frac * Math.PI;
+          const wave  = Math.sin(frac * Math.PI * 5 + T * 0.038) * 1.5;
+          const [ax, ay] = attract(
+            cx + Math.cos(angle) * (mHalfW + wave * 0.3),
+            mouthTopY + Math.sin(angle) * (arcH + wave * 0.5),
+            16, 90,
+          );
+          i === 0 ? ctx.moveTo(ax, ay) : ctx.lineTo(ax, ay);
+        }
+      }, (smileHue + 30) % 360);
+
+      // ── Thinking dots (fade in when mouthOpen → 0) ───────────────
+      const dotAlpha = Math.max(0, 1 - mo * 5);
+      if (dotAlpha > 0.01) {
+        const dotY = mouthTopY + 6;
+        ([-15, 0, 15] as number[]).forEach((dx, i) => {
+          const pulse = 0.45 + 0.55 * Math.sin(T * 0.09 + i * 1.15);
+          const dotHue = (eyeHue + i * 35) % 360;
+          const col    = `hsl(${dotHue}, 95%, 68%)`;
+          ctx.globalAlpha = dotAlpha * pulse * 0.9;
+          ctx.shadowColor = col;
+          ctx.shadowBlur  = 10;
+          ctx.fillStyle   = col;
+          ctx.beginPath();
+          ctx.arc(cx + dx, dotY, Math.max(0, 3.5 * pulse), 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur  = 0;
+      }
+
+      frameRef.current = requestAnimationFrame(loop);
+    };
+
+    frameRef.current = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(frameRef.current);
+      window.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseleave', onMouseLeave);
+    };
+  }, []);
+
   return (
-    <svg
-      viewBox="0 0 200 200"
-      width={180}
-      height={180}
+    <canvas
+      ref={canvasRef}
+      width={200}
+      height={200}
       style={{
         position: 'absolute',
-        bottom: 60,
+        bottom: 55,
         left: '50%',
         transform: 'translateX(-50%)',
-        opacity: 0.07,
         pointerEvents: 'none',
+        opacity: 0.52,
       }}
-    >
-      <defs>
-        <linearGradient id="sg1" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#a855f7" />
-          <stop offset="50%" stopColor="#06b6d4" />
-          <stop offset="100%" stopColor="#ec4899" />
-        </linearGradient>
-        <linearGradient id="sg2" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#3b82f6" />
-          <stop offset="100%" stopColor="#10b981" />
-        </linearGradient>
-        <filter id="sf">
-          <feGaussianBlur stdDeviation="2.5" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-
-      <circle cx="100" cy="100" r="78" stroke="url(#sg1)" strokeWidth="2.5" fill="none" filter="url(#sf)" />
-      <circle cx="72" cy="84" r="10" stroke="url(#sg2)" strokeWidth="2" fill="none" filter="url(#sf)" />
-      <circle cx="72" cy="84" r="3" fill="#a855f7" filter="url(#sf)" />
-      <circle cx="128" cy="84" r="10" stroke="url(#sg1)" strokeWidth="2" fill="none" filter="url(#sf)" />
-      <circle cx="128" cy="84" r="3" fill="#06b6d4" filter="url(#sf)" />
-      <path
-        d="M 66,118 C 72,140 128,140 134,118"
-        stroke="url(#sg1)"
-        strokeWidth="3"
-        fill="none"
-        strokeLinecap="round"
-        filter="url(#sf)"
-      />
-      <path d="M 30,60 C 20,80 40,100 30,120" stroke="#a855f7" strokeWidth="1.2" fill="none" opacity="0.6" />
-      <path d="M 170,60 C 180,80 160,100 170,120" stroke="#06b6d4" strokeWidth="1.2" fill="none" opacity="0.6" />
-      <path d="M 60,30 C 80,18 120,18 140,30" stroke="#ec4899" strokeWidth="1.2" fill="none" opacity="0.5" />
-      <path d="M 60,170 C 80,182 120,182 140,170" stroke="#3b82f6" strokeWidth="1.2" fill="none" opacity="0.5" />
-    </svg>
+    />
   );
 }
 
@@ -395,7 +585,7 @@ export default function GlowEdgeChat({
             animate={{ x: '0%', opacity: 1 }}
             exit={{ x: chatSide === 'left' ? '-100%' : '100%', opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 34 }}
-            className="fixed z-[48] flex flex-col overflow-hidden"
+            className="fixed z-[52] flex flex-col overflow-hidden"
             style={{
               top: 48,
               bottom: 0,
@@ -494,7 +684,7 @@ export default function GlowEdgeChat({
                 position: 'relative',
               }}
             >
-              <CadeSmiley />
+              <CadeSmiley mode={typing ? 'answering' : input.trim() ? 'thinking' : 'idle'} />
 
               {messages.map((msg, i) => (
                 <motion.div

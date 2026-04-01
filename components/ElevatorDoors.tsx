@@ -77,7 +77,7 @@ export default function ElevatorDoors({ isOpen, onClosed, onOpened }: ElevatorDo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex"
+      className="fixed inset-0 z-50 flex overflow-hidden"
       style={{ pointerEvents: visualOpen ? 'none' : 'auto' }}
     >
       {/* ── Left door ── */}

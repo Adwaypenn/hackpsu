@@ -58,7 +58,7 @@ function IntensityDial({ level, onChange }: { level: number; onChange: (n: numbe
         width={SIZE} height={SIZE}
         style={{ cursor: 'pointer', display: 'block', overflow: 'visible' }}
         onClick={() => onChange(level === 0 ? 1 : level === 5 ? 1 : level + 1)}
-        title="Click to increase intensity"
+        aria-label="Click to increase intensity"
       >
         <defs>
           <radialGradient id={gradId} cx="38%" cy="30%">

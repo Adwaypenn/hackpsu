@@ -218,7 +218,7 @@ function CadeSmiley({ mode }: { mode: SmileyMode }) {
         }
       }, (smileHue + 30) % 360);
 
-      // ── Thinking dots (fade in when mouthOpen → 0) ───────────────
+      // ── Thinking dots in mouth (fade in when mouthOpen → 0, i.e. user typing) ──
       const dotAlpha = Math.max(0, 1 - mo * 5);
       if (dotAlpha > 0.01) {
         const dotY = mouthTopY + 6;
@@ -232,6 +232,30 @@ function CadeSmiley({ mode }: { mode: SmileyMode }) {
           ctx.fillStyle   = col;
           ctx.beginPath();
           ctx.arc(cx + dx, dotY, Math.max(0, 3.5 * pulse), 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur  = 0;
+      }
+
+      // ── Answering dots top-right of face (bot is responding) ─────
+      const answerAlpha = Math.max(0, (mo - 1.2) / 0.45); // fades in as mouthOpen → 1.65
+      if (answerAlpha > 0.01) {
+        // position just outside the face ring, top-right quadrant
+        const baseAngle = -Math.PI * 0.22;   // ~40° above the right horizon
+        const dotDist   = R + 18;
+        const dotCx     = cx + Math.cos(baseAngle) * dotDist;
+        const dotCy     = cy + Math.sin(baseAngle) * dotDist;
+        ([0, 1, 2] as number[]).forEach((i) => {
+          const pulse  = 0.45 + 0.55 * Math.sin(T * 0.09 + i * 1.15);
+          const dotHue = (faceHue + 40 + i * 30) % 360;
+          const col    = `hsl(${dotHue}, 95%, 68%)`;
+          ctx.globalAlpha = answerAlpha * pulse * 0.95;
+          ctx.shadowColor = col;
+          ctx.shadowBlur  = 12;
+          ctx.fillStyle   = col;
+          ctx.beginPath();
+          ctx.arc(dotCx + i * 10, dotCy, Math.max(0, 3 * pulse), 0, Math.PI * 2);
           ctx.fill();
         });
         ctx.globalAlpha = 1;
@@ -673,6 +697,9 @@ export default function GlowEdgeChat({
               </button>
             </div>
 
+            {/* Smiley anchored to the panel, not the scroll area */}
+            <CadeSmiley mode={typing ? 'answering' : input.trim() ? 'thinking' : 'idle'} />
+
             <div
               style={{
                 flex: 1,
@@ -684,7 +711,6 @@ export default function GlowEdgeChat({
                 position: 'relative',
               }}
             >
-              <CadeSmiley mode={typing ? 'answering' : input.trim() ? 'thinking' : 'idle'} />
 
               {messages.map((msg, i) => (
                 <motion.div
